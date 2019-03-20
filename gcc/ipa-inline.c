@@ -1003,6 +1003,45 @@ want_inline_function_to_all_callers_p (struct cgraph_node *node, bool cold)
 {
   bool has_hot_call = false;
 
+  if (dump_file)
+    {
+      cgraph_node *ultimate = node->ultimate_alias_target ();
+      const char *name = ultimate->name ();
+      fprintf (dump_file,
+	       "want_inline_function_to_all_callers_p for %s\n",
+	       name);
+      fprintf (dump_file, "\talias ? %d\n", node->alias);
+
+      fprintf (dump_file, "\talready inilned ? %d\n",
+	       node->global.inlined_to);
+
+
+      fprintf (dump_file, "\thave callers ? %d\n",
+	       !node->call_for_symbol_and_aliases (has_caller_p, NULL, true));
+      fprintf (dump_file, "\tincrease size ? %d\n", (estimate_growth (node) > 0));
+      fprintf (dump_file, "\tall inlines possible ? %d\n",
+	       node->call_for_symbol_and_aliases (check_callers, &has_hot_call,
+						  true));
+      fprintf (dump_file, "\t cold but no hot ? %d\n", (!cold && !has_hot_call));
+    }
+
+  {
+    int ncallers = 0;
+
+    struct cgraph_edge *edge = node->callers;
+    while (edge != NULL)
+      {
+	++ncallers;
+	edge = edge->next_caller;
+      }
+
+    if (dump_file)
+      fprintf (dump_file, "\tnumber of callers: %d\n", ncallers);
+    if (ncallers > 1 && getenv ("APB_COUNT_CALLERS") != NULL)
+      return false;
+  }
+
+
   /* Aliases gets inlined along with the function they alias.  */
   if (node->alias)
     return false;
@@ -1761,6 +1800,9 @@ sum_callers (struct cgraph_node *node, void *data)
 static void
 inline_small_functions (void)
 {
+  if (getenv ("APB_OFF") != NULL)
+    return;
+
   struct cgraph_node *node;
   struct cgraph_edge *edge;
   edge_heap_t edge_heap (sreal::min ());
@@ -1996,6 +2038,23 @@ inline_small_functions (void)
             }
 	  if (dump_flags & TDF_DETAILS)
 	    edge_badness (edge, true);
+	}
+
+      if (getenv ("APB_NO_INLINE") != NULL)
+	{
+	  const char *n = callee->dump_name ();
+	  const char *m = getenv ("APB_NO_INLINE");
+	  if (dump_file)
+	    fprintf (dump_file, "APB: Compare %s to %s\n", n, m);
+	  if (strncmp (n, m, strlen (m)) == 0)
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "APB: Not inlining %s\n", callee->dump_name ());
+	      edge->inline_failed = CIF_FUNCTION_NOT_INLINABLE;
+	      report_inline_failed_reason (edge);
+	      resolve_noninline_speculation (&edge_heap, edge);
+	      continue;
+	    }
 	}
 
       if (overall_size + growth > max_size
