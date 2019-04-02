@@ -853,6 +853,18 @@ want_inline_small_function_p (struct cgraph_edge *e, bool report)
 	       && (growth >= MAX_INLINE_INSNS_SINGLE
 		   || growth_likely_positive (callee, growth)))
 	{
+	  if (dump_file)
+	    {
+	      const char *name = callee->name ();
+	      fprintf (dump_file,
+		       "Found CIF_UNLIKELY_CALL for %s\n"
+		       "e->maybe_hot_p ? %d\n"
+		       "growth ? %d (limit %d)\n"
+		       "growth_likely_positive ? %d\n",
+		       name, e->maybe_hot_p (),
+		       growth, MAX_INLINE_INSNS_SINGLE,
+		       growth_likely_positive (callee, growth));
+	    }
           e->inline_failed = CIF_UNLIKELY_CALL;
 	  want_inline = false;
 	}
@@ -1018,7 +1030,8 @@ want_inline_function_to_all_callers_p (struct cgraph_node *node, bool cold)
 
       fprintf (dump_file, "\thave callers ? %d\n",
 	       !node->call_for_symbol_and_aliases (has_caller_p, NULL, true));
-      fprintf (dump_file, "\tincrease size ? %d\n", (estimate_growth (node) > 0));
+      if (!node->global.inlined_to)
+	fprintf (dump_file, "\tincrease size ? %d\n", (estimate_growth (node) > 0));
       fprintf (dump_file, "\tall inlines possible ? %d\n",
 	       node->call_for_symbol_and_aliases (check_callers, &has_hot_call,
 						  true));
