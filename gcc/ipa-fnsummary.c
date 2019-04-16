@@ -2199,6 +2199,9 @@ analyze_function_body (struct cgraph_node *node, bool early)
 		    }
 		}
 
+	      if (dump_file)
+		fprintf (dump_file, "Updating ipa_call_summary (%p) call_stmt_size to %d <3>\n",
+			 es, this_size);
 	      es->call_stmt_size = this_size;
 	      es->call_stmt_time = this_time;
 	      es->loop_depth = bb_loop_depth (bb);
@@ -2438,6 +2441,9 @@ compute_fn_summary (struct cgraph_node *node, bool early)
       predicate t = true;
 
       node->local.can_change_signature = false;
+      if (dump_file)
+	fprintf (dump_file, "Initialise ipa_call_summary (%p) call_stmt_size to default %d <2>\n",
+		 es, eni_size_weights.call_cost);
       es->call_stmt_size = eni_size_weights.call_cost;
       es->call_stmt_time = eni_time_weights.call_cost;
       info->account_size_time (ipa_fn_summary::size_scale
@@ -3237,6 +3243,9 @@ read_ipa_call_summary (struct lto_input_block *ib, struct cgraph_edge *e,
 
   if (es)
     {
+      if (dump_file)
+	fprintf (dump_file, "Updating ipa_call_summary (%p) call_stmt_size to %d <1>\n",
+		 es, size);
       es->call_stmt_size = size;
       es->call_stmt_time = time;
       es->loop_depth = depth;

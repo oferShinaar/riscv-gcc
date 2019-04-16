@@ -746,6 +746,8 @@ big_speedup_p (struct cgraph_edge *e)
   return false;
 }
 
+extern bool growth_likely_positive_debug;
+
 /* Return true if we are interested in inlining small function.
    When REPORT is true, report reason to dump file.  */
 
@@ -856,6 +858,7 @@ want_inline_small_function_p (struct cgraph_edge *e, bool report)
 	  if (dump_file)
 	    {
 	      const char *name = callee->name ();
+	      growth_likely_positive_debug = true;
 	      fprintf (dump_file,
 		       "Found CIF_UNLIKELY_CALL for %s\n"
 		       "e->maybe_hot_p ? %d\n"
@@ -864,6 +867,7 @@ want_inline_small_function_p (struct cgraph_edge *e, bool report)
 		       name, e->maybe_hot_p (),
 		       growth, MAX_INLINE_INSNS_SINGLE,
 		       growth_likely_positive (callee, growth));
+	      growth_likely_positive_debug = false;
 	    }
           e->inline_failed = CIF_UNLIKELY_CALL;
 	  want_inline = false;
@@ -1031,11 +1035,10 @@ want_inline_function_to_all_callers_p (struct cgraph_node *node, bool cold)
       fprintf (dump_file, "\thave callers ? %d\n",
 	       !node->call_for_symbol_and_aliases (has_caller_p, NULL, true));
       if (!node->global.inlined_to)
-	fprintf (dump_file, "\tincrease size ? %d\n", (estimate_growth (node) > 0));
-      fprintf (dump_file, "\tall inlines possible ? %d\n",
-	       node->call_for_symbol_and_aliases (check_callers, &has_hot_call,
-						  true));
-      fprintf (dump_file, "\t cold but no hot ? %d\n", (!cold && !has_hot_call));
+	fprintf (dump_file, "\tincrease size ? %d (growth %d)\n",
+		 (estimate_growth (node) > 0), estimate_growth (node));
+      fprintf (dump_file, "\t cold ? %d\n", cold);
+      fprintf (dump_file, "\t has hot call ? %d\n", has_hot_call);
     }
 
   {
@@ -1062,6 +1065,10 @@ want_inline_function_to_all_callers_p (struct cgraph_node *node, bool cold)
   if (node->global.inlined_to)
     return false;
   /* Does it have callers?  */
+  if (dump_file)
+    fprintf (dump_file, "\tall inlines possible ? %d\n",
+	     node->call_for_symbol_and_aliases (check_callers, &has_hot_call,
+						true));
   if (!node->call_for_symbol_and_aliases (has_caller_p, NULL, true))
     return false;
   /* Inlining into all callers would increase size?  */
@@ -1890,6 +1897,10 @@ inline_small_functions (void)
   max_size = compute_max_insns (overall_size);
   min_size = overall_size;
 
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
+
   /* Populate the heap with all edges we might inline.  */
 
   FOR_EACH_DEFINED_FUNCTION (node)
@@ -1942,9 +1953,17 @@ inline_small_functions (void)
 	}
     }
 
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
+
   gcc_assert (in_lto_p
 	      || !(max_count > 0)
 	      || (profile_info && flag_branch_probabilities));
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   while (!edge_heap.empty ())
     {
@@ -1958,7 +1977,11 @@ inline_small_functions (void)
       gcc_assert (edge->aux);
       edge->aux = NULL;
       if (!edge->inline_failed || !edge->callee->analyzed)
-	continue;
+	{
+	  if (dump_file)
+	    fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
+	  continue;
+	}
 
 #if CHECKING_P
       /* Be sure that caches are maintained consistent.
@@ -1968,7 +1991,7 @@ inline_small_functions (void)
 	  && (!max_count.initialized_p () || !max_count.nonzero_p ()))
 	{
 	  sreal cached_badness = edge_badness (edge, false);
-     
+
 	  int old_size_est = estimate_edge_size (edge);
 	  sreal old_time_est = estimate_edge_time (edge);
 	  int old_hints_est = estimate_edge_hints (edge);
@@ -2007,6 +2030,8 @@ inline_small_functions (void)
 	  if (edge_heap.min () && current_badness > edge_heap.min_key ())
 	    {
 	      edge->aux = edge_heap.insert (current_badness, edge);
+	      if (dump_file)
+		fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
 	      continue;
 	    }
 	  else
@@ -2017,6 +2042,8 @@ inline_small_functions (void)
 	  || !can_inline_edge_by_limits_p (edge, true))
 	{
 	  resolve_noninline_speculation (&edge_heap, edge);
+	  if (dump_file)
+	    fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
 	  continue;
 	}
       
@@ -2066,6 +2093,8 @@ inline_small_functions (void)
 	      edge->inline_failed = CIF_FUNCTION_NOT_INLINABLE;
 	      report_inline_failed_reason (edge);
 	      resolve_noninline_speculation (&edge_heap, edge);
+	      if (dump_file)
+		fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
 	      continue;
 	    }
 	}
@@ -2076,12 +2105,16 @@ inline_small_functions (void)
 	  edge->inline_failed = CIF_INLINE_UNIT_GROWTH_LIMIT;
 	  report_inline_failed_reason (edge);
 	  resolve_noninline_speculation (&edge_heap, edge);
+	  if (dump_file)
+	    fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
 	  continue;
 	}
 
       if (!want_inline_small_function_p (edge, true))
 	{
 	  resolve_noninline_speculation (&edge_heap, edge);
+	  if (dump_file)
+	    fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
 	  continue;
 	}
 
@@ -2101,6 +2134,8 @@ inline_small_functions (void)
 	    {
 	      edge->inline_failed = CIF_RECURSIVE_INLINING;
 	      resolve_noninline_speculation (&edge_heap, edge);
+	      if (dump_file)
+		fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
 	      continue;
 	    }
 	  reset_edge_caches (where);
@@ -2137,6 +2172,8 @@ inline_small_functions (void)
 		= (DECL_DISREGARD_INLINE_LIMITS (edge->callee->decl)
 		   ? CIF_RECURSIVE_INLINING : CIF_UNSPECIFIED);
 	      resolve_noninline_speculation (&edge_heap, edge);
+	      if (dump_file)
+		fprintf (dump_file, "Not inlining at line %d\n", __LINE__);
 	      continue;
 	    }
 	  else if (depth && dump_file)
@@ -2192,6 +2229,10 @@ inline_small_functions (void)
 	    fprintf (dump_file, "New minimal size reached: %i\n", min_size);
 	}
     }
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   free_growth_caches ();
   if (dump_enabled_p ())
@@ -2523,10 +2564,18 @@ ipa_inline (void)
   int cold;
   bool remove_functions = false;
 
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
+
   order = XCNEWVEC (struct cgraph_node *, symtab->cgraph_count);
 
   if (dump_file)
     ipa_dump_fn_summaries (dump_file);
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   nnodes = ipa_reverse_postorder (order);
   spec_rem = profile_count::zero ();
@@ -2550,6 +2599,10 @@ ipa_inline (void)
     }
 
   if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
+
+  if (dump_file)
     fprintf (dump_file, "\nFlattening functions:\n");
 
   /* First shrink order array, so that it only contains nodes with
@@ -2561,6 +2614,10 @@ ipa_inline (void)
 			    DECL_ATTRIBUTES (node->decl)) != NULL)
 	order[j--] = order[i];
     }
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   /* After the above loop, order[j + 1] ... order[nnodes - 1] contain
      nodes with flatten attribute.  If there is more than one such
@@ -2575,6 +2632,10 @@ ipa_inline (void)
 	= symtab->add_cgraph_removal_hook (&flatten_remove_node_hook,
 					   flatten_removed_nodes);
     }
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   /* In the first pass handle functions to be flattened.  Do this with
      a priority so none of our later choices will make this impossible.  */
@@ -2595,6 +2656,10 @@ ipa_inline (void)
       flatten_function (node, false, true);
     }
 
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
+
   if (j < nnodes - 2)
     {
       symtab->remove_cgraph_removal_hook (node_removal_hook_holder);
@@ -2603,9 +2668,21 @@ ipa_inline (void)
   free (order);
 
   if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
+
+  if (dump_file)
     dump_overall_stats ();
 
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
+
   inline_small_functions ();
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   gcc_assert (symtab->state == IPA_SSA);
   symtab->state = IPA_SSA_AFTER_INLINING;
@@ -2622,6 +2699,10 @@ ipa_inline (void)
     fprintf (dump_file,
 	     "\nDeciding on functions to be inlined into all callers and "
 	     "removing useless speculations:\n");
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   /* Inlining one function called once has good chance of preventing
      inlining other function into the same callee.  Ideally we should
@@ -2680,6 +2761,10 @@ ipa_inline (void)
 	    }
 	}
     }
+
+  if (dump_file)
+    fprintf (dump_file, "================================ %s : %d ==================================\n",
+	     __FILE__, __LINE__);
 
   /* Free ipa-prop structures if they are no longer needed.  */
   ipa_free_all_structures_after_iinln ();

@@ -83,7 +83,33 @@ estimate_edge_growth (struct cgraph_edge *edge)
 {
   ipa_call_summary *s = ipa_call_summaries->get (edge);
   gcc_checking_assert (s->call_stmt_size || !edge->callee->analyzed);
-  return (estimate_edge_size (edge) - s->call_stmt_size);
+
+  if (dump_file)
+    {
+      const char *caller_name
+	= edge->caller->ultimate_alias_target ()->name ();
+      const char *callee_name
+	= edge->callee->ultimate_alias_target ()->name ();
+
+      fprintf (dump_file, "Estimate edge growth for %s -> %s\n",
+	       caller_name, callee_name);
+      fprintf (dump_file, "\t estimate_edge_size = %d\n",
+	       estimate_edge_size (edge));
+      fprintf (dump_file, "\t s (%p) ->call_stmt_size = %d\n",
+	       ((void *) s), s->call_stmt_size);
+    }
+
+  int growth = (estimate_edge_size (edge) - s->call_stmt_size);
+
+  if (getenv ("APB_DECR") != NULL)
+    {
+      int sz = atoi (getenv ("APB_DECR"));
+      if (dump_file)
+	fprintf (dump_file, "\t Adjusting growth by -%d\n", sz);
+      growth -= sz;
+    }
+
+  return growth;
 }
 
 /* Return estimated callee runtime increase after inlining

@@ -293,6 +293,13 @@ do_estimate_growth_1 (struct cgraph_node *node, void *data)
   struct cgraph_edge *e;
   struct growth_data *d = (struct growth_data *) data;
 
+  if (dump_file)
+    {
+      fprintf (dump_file, "================================ %s : %d ==================================\n",
+	       __FILE__, __LINE__);
+      fprintf (dump_file, "do_estimate_growth_1 for: %s\n", node->ultimate_alias_target ()->name ());
+    }
+
   for (e = node->callers; e; e = e->next_caller)
     {
       gcc_checking_assert (e->inline_failed);
@@ -320,10 +327,26 @@ do_estimate_growth_1 (struct cgraph_node *node, void *data)
 int
 estimate_growth (struct cgraph_node *node)
 {
+  if (dump_file)
+    {
+      fprintf (dump_file, "================================ %s : %d ==================================\n",
+	       __FILE__, __LINE__);
+      fprintf (dump_file, "\t estimate_growth for %s ...\n",
+	       node->ultimate_alias_target ()->name ());
+    }
+
   struct growth_data d = { node, false, false, 0 };
   struct ipa_fn_summary *info = ipa_fn_summaries->get (node);
 
   node->call_for_symbol_and_aliases (do_estimate_growth_1, &d, true);
+
+  if (dump_file)
+    {
+      fprintf (dump_file, "================================ %s : %d ==================================\n",
+	       __FILE__, __LINE__);
+      fprintf (dump_file, "\t estimate_growth for %s, part way through, growth is %d\n",
+	       node->ultimate_alias_target ()->name (), d.growth);
+    }
 
   /* For self recursive functions the growth estimation really should be
      infinity.  We don't want to return very large values because the growth
@@ -345,6 +368,14 @@ estimate_growth (struct cgraph_node *node)
 	d.growth -= (info->size
 		     * (100 - PARAM_VALUE (PARAM_COMDAT_SHARING_PROBABILITY))
 		     + 50) / 100;
+    }
+
+  if (dump_file)
+    {
+      fprintf (dump_file, "\t estimate_growth for %s = %d\n",
+	       node->ultimate_alias_target ()->name (), d.growth);
+      fprintf (dump_file, "================================ %s : %d ==================================\n",
+	       __FILE__, __LINE__);
     }
 
   return d.growth;
@@ -375,6 +406,7 @@ check_callers (cgraph_node *node, int *max_callers)
   return false;
 }
 
+bool growth_likely_positive_debug = false;
 
 /* Make cheap estimation if growth of NODE is likely positive knowing
    EDGE_GROWTH of one particular edge. 
@@ -389,12 +421,30 @@ growth_likely_positive (struct cgraph_node *node,
   struct cgraph_edge *e;
   gcc_checking_assert (edge_growth > 0);
 
+  if (growth_likely_positive_debug && dump_file)
+    fprintf (dump_file, "growth_likely_positive: estimate_growth = %d\n",
+	     estimate_growth (node));
+
   /* First quickly check if NODE is removable at all.  */
   if (DECL_EXTERNAL (node->decl))
-    return true;
-  if (!node->can_remove_if_no_direct_calls_and_refs_p ()
+    {
+      if (growth_likely_positive_debug && dump_file)
+	fprintf (dump_file, "growth_likely_positive: Is extern\n");
+      return true;
+    }
+  if ((getenv ("APB_DEBUG_1") == NULL && !node->can_remove_if_no_direct_calls_and_refs_p ())
       || node->address_taken)
-    return true;
+    {
+      if (growth_likely_positive_debug && dump_file)
+	{
+	  if (!node->can_remove_if_no_direct_calls_and_refs_p ())
+	    fprintf (dump_file, "growth_likely_positive: Can't remove\n", __LINE__);
+	  if (node->address_taken)
+	    fprintf (dump_file, "growth_likely_positive: Address taken\n", __LINE__);
+	}
+
+      return true;
+    }
 
   max_callers = ipa_fn_summaries->get (node)->size * 4 / edge_growth + 2;
 
@@ -403,13 +453,21 @@ growth_likely_positive (struct cgraph_node *node,
       max_callers--;
       if (!max_callers
 	  || cgraph_inline_failed_type (e->inline_failed) == CIF_FINAL_ERROR)
-	return true;
+	{
+	  if (growth_likely_positive_debug && dump_file)
+	    fprintf (dump_file, "growth_likely_positive: Line %d\n", __LINE__);
+	  return true;
+	}
     }
 
   ipa_ref *ref;
   FOR_EACH_ALIAS (node, ref)
     if (check_callers (dyn_cast <cgraph_node *> (ref->referring), &max_callers))
-      return true;
+      {
+	if (growth_likely_positive_debug && dump_file)
+	  fprintf (dump_file, "growth_likely_positive: Line %d\n", __LINE__);
+	return true;
+      }
 
   /* Unlike for functions called once, we play unsafe with
      COMDATs.  We can allow that since we know functions
@@ -422,10 +480,22 @@ growth_likely_positive (struct cgraph_node *node,
   if (DECL_COMDAT (node->decl))
     {
       if (!node->can_remove_if_no_direct_calls_p ())
-	return true;
+	{
+	  if (growth_likely_positive_debug && dump_file)
+	    fprintf (dump_file, "growth_likely_positive: Line %d\n", __LINE__);
+	  return true;
+	}
     }
-  else if (!node->will_be_removed_from_program_if_no_direct_calls_p ())
-    return true;
+  else if (getenv ("APB_DEBUG_1") == NULL
+	   && !node->will_be_removed_from_program_if_no_direct_calls_p ())
+    {
+      if (growth_likely_positive_debug && dump_file)
+	fprintf (dump_file, "growth_likely_positive: Line %d\n", __LINE__);
+      return true;
+    }
 
+  if (growth_likely_positive_debug && dump_file)
+    fprintf (dump_file, "growth_likely_positive: estimate_growth = %d\n",
+	     estimate_growth (node));
   return estimate_growth (node) > 0;
 }
