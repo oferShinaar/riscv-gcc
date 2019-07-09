@@ -848,6 +848,26 @@ riscv_legitimate_address_p (machine_mode mode, rtx x, bool strict_p)
   return riscv_classify_address (&addr, x, mode, strict_p);
 }
 
+bool
+compressed_lw_address_p (rtx x, bool strict)
+{
+  struct riscv_address_info addr;
+  bool result;
+
+  result = riscv_classify_address (&addr, x, GET_MODE (x), strict);
+
+  if (! result
+      || addr.type != ADDRESS_REG
+      || (REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER ? strict
+	 : (REGNO_REG_CLASS (REGNO (addr.reg)) != COMPRESSED_REGS
+	    && addr.reg != stack_pointer_rtx))
+      || ! insn_const_int_ok_for_constraint (INTVAL (addr.offset),
+					     CONSTRAINT_M))
+    return false;
+
+  return result;
+}
+
 /* Return the number of instructions needed to load or store a value
    of mode MODE at address X.  Return 0 if X isn't valid for MODE.
    Assume that multiword moves may need to be split into word moves
