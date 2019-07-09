@@ -848,6 +848,7 @@ riscv_legitimate_address_p (machine_mode mode, rtx x, bool strict_p)
   return riscv_classify_address (&addr, x, mode, strict_p);
 }
 
+/*TODO prefix with riscv_ if keeping.  */
 bool
 compressed_lw_address_p (rtx x, bool strict)
 {
