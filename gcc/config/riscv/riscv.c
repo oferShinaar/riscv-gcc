@@ -1326,8 +1326,26 @@ riscv_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
       HOST_WIDE_INT offset = INTVAL (XEXP (x, 1));
 
       if (!riscv_valid_base_register_p (base, mode, false))
-	base = copy_to_mode_reg (Pmode, base);
-      addr = riscv_add_offset (NULL, base, offset);
+	    base = copy_to_mode_reg (Pmode, base);
+
+      if (optimize_function_for_size_p (cfun)
+	  && cfun->machine->fwprop_not_expected
+	  && mode == SImode
+	  && (offset & 3) == 0
+	  && ! IN_RANGE (offset, 0, 124))
+	{
+	  rtx high;
+
+	  /* Leave OFFSET as a 7-bit offset and put the excess in HIGH.  */
+	  high = GEN_INT (offset & ~124);
+	  offset &= 124;
+	  if (!SMALL_OPERAND (INTVAL (high)))
+	    high = force_reg (Pmode, high);
+	  base = force_reg (Pmode, gen_rtx_PLUS (Pmode, high, base));
+	  addr = plus_constant (Pmode, base, offset);
+	}
+      else
+	    addr = riscv_add_offset (NULL, base, offset);
       return riscv_force_address (addr, mode);
     }
 
