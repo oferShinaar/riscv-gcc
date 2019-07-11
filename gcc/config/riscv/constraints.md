@@ -54,6 +54,13 @@
   (and (match_code "const_int")
        (match_test "LUI_OPERAND (ival)")))
 
+;; ??? This doesn't need to be a constraint.
+(define_constraint "M"
+  "A 7-bit unsigned immediate, multiple of 4, for compressed load word."
+  (and (match_code "const_int")
+       (and (match_test "IN_RANGE (ival, 0, 124)")
+           (match_test "(ival & 0x3) == 0"))))
+
 ;; Floating-point constant +0.0, used for FCVT-based moves when FMV is
 ;; not available in RV32.
 (define_constraint "G"
