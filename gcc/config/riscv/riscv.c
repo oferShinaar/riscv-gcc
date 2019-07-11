@@ -848,6 +848,16 @@ riscv_legitimate_address_p (machine_mode mode, rtx x, bool strict_p)
   return riscv_classify_address (&addr, x, mode, strict_p);
 }
 
+/* Return true if hard reg REGNO can be used in compressed instructions.  */
+
+static int
+riscv_compressed_reg_p (int regno)
+{
+  /* x8-x15/f8-f15 are compressible registers.  */
+  return (TARGET_RVC && (IN_RANGE (regno, GP_REG_FIRST + 8, GP_REG_FIRST + 15)
+         || IN_RANGE (regno, FP_REG_FIRST + 8, FP_REG_FIRST + 15)));
+}
+
 /*TODO prefix with riscv_ if keeping.  */
 bool
 compressed_lw_address_p (rtx x, bool strict)
@@ -860,8 +870,8 @@ compressed_lw_address_p (rtx x, bool strict)
   if (! result
       || addr.type != ADDRESS_REG
       || (REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER ? strict
-	 : (REGNO_REG_CLASS (REGNO (addr.reg)) != COMPRESSED_REGS
-	    && addr.reg != stack_pointer_rtx))
+	 : riscv_compressed_reg_p (REGNO (addr.reg))
+	    && addr.reg != stack_pointer_rtx)
       || ! insn_const_int_ok_for_constraint (INTVAL (addr.offset),
 					     CONSTRAINT_M))
     return false;
@@ -4652,8 +4662,7 @@ static int
 riscv_register_priority (int regno)
 {
   /* Favor x8-x15/f8-f15 to improve the odds of RVC instruction selection.  */
-  if (TARGET_RVC && (IN_RANGE (regno, GP_REG_FIRST + 8, GP_REG_FIRST + 15)
-		     || IN_RANGE (regno, FP_REG_FIRST + 8, FP_REG_FIRST + 15)))
+  if (riscv_compressed_reg_p (regno))
     return 1;
 
   return 0;
