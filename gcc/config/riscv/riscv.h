@@ -289,6 +289,22 @@ along with GCC; see the file COPYING3.  If not see
 #define FP_REG_P(REGNO)  \
   ((unsigned int) ((int) (REGNO) - FP_REG_FIRST) < FP_REG_NUM)
 
+/* True when REGNO is in SIBCALL_REGS set.  */
+#define SIBCALL_REG_P(REGNO)					\
+  (GP_REG_P(REGNO) && (((REGNO) >= 5 && (REGNO) <= 7)		\
+		       || ((REGNO) >= 10 && (REGNO) <= 17)	\
+		       || ((REGNO) >= 28 && (REGNO) <= 31)))
+
+/* True if REGNO is a register saved by the callee.  */
+#define CALLEE_SAVED_REG_P(REGNO)			\
+  ((GP_REG_P (REGNO)					\
+    && ((REGNO) == 2					\
+	|| ((REGNO) >= 8 && (REGNO) <= 9)		\
+	|| ((REGNO) >= 18 && (REGNO) <= 27)))		\
+   || (FP_REG_P (REGNO)					\
+       && (((REGNO) >= 40 && (REGNO) <= 41)		\
+	   || ((REGNO) >= 50 && (REGNO) <= 59))))
+
 #define FP_REG_RTX_P(X) (REG_P (X) && FP_REG_P (REGNO (X)))
 
 /* Use s0 as the frame pointer if it is so requested.  */
@@ -917,5 +933,9 @@ extern unsigned riscv_stack_boundary;
 
 #define SWSP_REACH (4LL << C_SxSP_BITS)
 #define SDSP_REACH (8LL << C_SxSP_BITS)
+
+/* Called from RISCV_REORG, this is defined in riscv-sr.c.  */
+
+extern void riscv_remove_unneeded_save_restore_calls (void);
 
 #endif /* ! GCC_RISCV_H */
