@@ -101,11 +101,15 @@ estimate_edge_growth (struct cgraph_edge *edge)
 
   int growth = (estimate_edge_size (edge) - s->call_stmt_size);
 
-  if (getenv ("APB_DECR") != NULL)
+  int sz = 2;
+  const char *apb_decr = getenv ("APB_DECR");
+  if (apb_decr != NULL)
+    sz = atoi (apb_decr);
+
+  if (sz != 0)
     {
       struct cgraph_node *caller = edge->caller;
       ipa_fn_summary *fs = ipa_fn_summaries->get (caller);
-      int sz = atoi (getenv ("APB_DECR"));
       if (dump_file)
 	fprintf (dump_file, "\t Adjusting growth by -%d\n", sz);
       growth -= sz;
