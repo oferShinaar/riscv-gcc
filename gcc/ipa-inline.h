@@ -101,7 +101,9 @@ estimate_edge_growth (struct cgraph_edge *edge)
 
   int growth = (estimate_edge_size (edge) - s->call_stmt_size);
 
-  int sz = strtol(flag_inline_growth_bias, NULL, 0);
+  int sz = 0;
+  if (flag_inline_growth_bias)
+    sz = strtol(flag_inline_growth_bias, NULL, 0);
   if (sz != 0)
     {
       struct cgraph_node *caller = edge->caller;
@@ -110,9 +112,11 @@ estimate_edge_growth (struct cgraph_edge *edge)
 	fprintf (dump_file, "\t Adjusting growth by %d\n", sz);
       growth += sz;
       if (growth < 0 && fs->size + growth < 0) {
-	fprintf (dump_file, "\t Growth %d would shrink size beneath zero.\n", growth);
+	if (dump_file)
+          fprintf (dump_file, "\t Growth %d would shrink size beneath zero.\n", growth);
 	growth = -fs->size;
-	fprintf (dump_file, "\t Setting growth to %d to make size zero.\n", growth);
+        if (dump_file)
+	  fprintf (dump_file, "\t Setting growth to %d to make size zero.\n", growth);
       }
     }
 
