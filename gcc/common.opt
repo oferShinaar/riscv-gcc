@@ -1666,6 +1666,10 @@ finline-limit=
 Common RejectNegative Joined UInteger
 -finline-limit=<number>	Limit the size of inlined functions to <number>.
 
+finline-growth-bias=
+Common RejectNegative Joined Var(flag_inline_growth_bias) Init(0)
+-finline-growth-bias=<number>	Decrease the growth estimate for inlined functions by <number>.
+
 finline-atomics
 Common Report Var(flag_inline_atomics) Init(1) Optimization
 Inline __atomic operations when a lock free instruction sequence is available.
