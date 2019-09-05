@@ -874,7 +874,6 @@ riscv_compressed_lw_address_p (rtx x)
   /* Return false if address is not compressed_reg + small_offset.  */
   if (!result
       || addr.type != ADDRESS_REG
-      || REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER
       || (!riscv_compressed_reg_p (REGNO (addr.reg))
 	    && addr.reg != stack_pointer_rtx)
       || !CONST_INT_P (addr.offset)
