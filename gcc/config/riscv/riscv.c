@@ -1866,7 +1866,7 @@ riscv_address_cost (rtx addr, machine_mode mode,
   if (current_pass->tv_id != TV_FWPROP
 #endif
       && !speed && mode == SImode
-      && riscv_compressed_lw_address_p (addr, false))
+      && riscv_compressed_lw_address_p (addr, reload_completed))
     return 1;
   return !speed + riscv_address_insns (addr, mode, false);
 }
