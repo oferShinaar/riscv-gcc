@@ -859,15 +859,23 @@ riscv_compressed_reg_p (int regno)
 }
 
 static bool
-riscv_compressed_lw_address_p (rtx x, bool strict)
+riscv_compressed_lw_address_p (rtx x)
 {
   struct riscv_address_info addr;
-  bool result = riscv_classify_address (&addr, x, GET_MODE (x), strict);
+  bool result = riscv_classify_address (&addr, x, GET_MODE (x),
+					reload_completed);
 
+  /* Before reload, assuming all load/stores of valid addresses get compressed
+     gives better code size than checking if the address is reg + small_offset
+     early on.  */
+  if (result && !reload_completed)
+    return true;
+
+  /* Return false if address is not compressed_reg + small_offset.  */
   if (!result
       || addr.type != ADDRESS_REG
-      || REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER ? strict
-	 : (!riscv_compressed_reg_p (REGNO (addr.reg))
+      || REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER
+      || (!riscv_compressed_reg_p (REGNO (addr.reg))
 	    && addr.reg != stack_pointer_rtx)
       || !CONST_INT_P (addr.offset)
       || (INTVAL (addr.offset) & 3) != 0
@@ -1860,7 +1868,7 @@ riscv_address_cost (rtx addr, machine_mode mode,
 		    bool speed ATTRIBUTE_UNUSED)
 {
       if (!speed && mode == SImode
-      && riscv_compressed_lw_address_p (addr, reload_completed))
+      && riscv_compressed_lw_address_p (addr))
     return 1;
   return !speed + riscv_address_insns (addr, mode, false);
 }
