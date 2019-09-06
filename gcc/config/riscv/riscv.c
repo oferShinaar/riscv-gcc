@@ -855,18 +855,16 @@ riscv_compressed_reg_p (int regno)
 {
   /* x8-x15/f8-f15 are compressible registers.  */
   return (TARGET_RVC && (IN_RANGE (regno, GP_REG_FIRST + 8, GP_REG_FIRST + 15)
-         || IN_RANGE (regno, FP_REG_FIRST + 8, FP_REG_FIRST + 15)));
+	  || IN_RANGE (regno, FP_REG_FIRST + 8, FP_REG_FIRST + 15)));
 }
 
 static bool
 riscv_compressed_lw_address_p (rtx x, bool strict)
 {
   struct riscv_address_info addr;
-  bool result;
+  bool result = riscv_classify_address (&addr, x, GET_MODE (x), strict);
 
-  result = riscv_classify_address (&addr, x, GET_MODE (x), strict);
-
-  if (! result
+  if (!result
       || addr.type != ADDRESS_REG
       || (REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER ? strict
 	 : !riscv_compressed_reg_p (REGNO (addr.reg))
@@ -1363,7 +1361,7 @@ riscv_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
 	  && cfun->machine->fwprop_not_expected
 	  && mode == SImode
 	  && (offset & 3) == 0
-	  && ! IN_RANGE (offset, 0, 124))
+	  && !IN_RANGE (offset, 0, 124))
 	{
 	  rtx high;
 
@@ -4533,6 +4531,103 @@ static struct machine_function *
 riscv_init_machine_status (void)
 {
   return ggc_cleared_alloc<machine_function> ();
+}
+
+
+namespace {
+
+const pass_data pass_data_shorten_memrefs =
+{
+  RTL_PASS, /* type */
+  "shorten_memrefs", /* name */
+  OPTGROUP_NONE, /* optinfo_flags */
+  TV_NONE, /* tv_id */
+  0, /* properties_required */
+  0, /* properties_provided */
+  0, /* properties_destroyed */
+  0, /* todo_flags_start */
+  0, /* todo_flags_finish */
+};
+
+class pass_shorten_memrefs : public rtl_opt_pass
+{
+public:
+  pass_shorten_memrefs (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_shorten_memrefs, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  virtual bool gate (function *) { return optimize > 0; }
+  virtual unsigned int execute (function *);
+
+}; // class pass_shorten_memrefs
+
+unsigned int
+pass_shorten_memrefs::execute (function *fn)
+{
+  typedef int_hash <HOST_WIDE_INT, 0> regno_hash;
+  typedef hash_map <regno_hash, int> regno_map;
+
+  basic_block bb;
+  rtx_insn *insn;
+
+  cfun->machine->fwprop_not_expected = true;
+
+  regstat_init_n_sets_and_refs ();
+
+  FOR_ALL_BB_FN (bb, fn)
+  {
+    regno_map *m = hash_map<regno_hash, int>::create_ggc (10);
+    for (int pass = 0; !optimize_bb_for_speed_p (bb) && pass < 2; pass++)
+      FOR_BB_INSNS (bb, insn)
+	{
+	  if (!NONJUMP_INSN_P (insn))
+	    continue;
+	  rtx pat = PATTERN (insn);
+	  if (GET_CODE (pat) != SET)
+	    continue;
+	  start_sequence ();
+	  for (int i = 0; i < 2; i++)
+	    {
+	      rtx mem = XEXP (pat, i);
+	      if (MEM_P (mem) && GET_MODE (mem) == SImode)
+		{
+		  rtx addr = XEXP (mem, 0);
+		  if (GET_CODE (addr) != PLUS)
+		    continue;
+		  if (!REG_P (XEXP (addr, 0)))
+		    continue;
+		  HOST_WIDE_INT regno = REGNO (XEXP (addr, 0));
+		  if (REG_N_REFS (regno) < 4)
+		    continue;
+		  if (pass == 0)
+		    m->get_or_insert (regno)++;
+		  else if (m->get_or_insert (regno) > 3)
+		    {
+		      addr
+			= riscv_legitimize_address (addr, addr, GET_MODE (mem));
+		      XEXP (pat, i) = replace_equiv_address (mem, addr);
+		      df_insn_rescan (insn);
+		    }
+		}
+	    }
+	  rtx_insn *seq = get_insns ();
+	  end_sequence ();
+	  emit_insn_before (seq, insn);
+	}
+
+  }
+  regstat_free_n_sets_and_refs ();
+
+  return 0;
+}
+
+} // anon namespace
+
+opt_pass *
+make_pass_shorten_memrefs (gcc::context *ctxt)
+{
+  return new pass_shorten_memrefs (ctxt);
 }
 
 /* Implement TARGET_OPTION_OVERRIDE.  */
