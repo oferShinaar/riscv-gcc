@@ -870,7 +870,7 @@ compressed_lw_address_p (rtx x, bool strict)
   if (! result
       || addr.type != ADDRESS_REG
       || (REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER ? strict
-	 : riscv_compressed_reg_p (REGNO (addr.reg))
+	 : !riscv_compressed_reg_p (REGNO (addr.reg))
 	    && addr.reg != stack_pointer_rtx)
       || !CONST_INT_P (addr.offset)
       || (INTVAL (addr.offset) & 3) != 0
