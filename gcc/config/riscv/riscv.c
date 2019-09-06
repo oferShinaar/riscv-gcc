@@ -858,9 +858,8 @@ riscv_compressed_reg_p (int regno)
          || IN_RANGE (regno, FP_REG_FIRST + 8, FP_REG_FIRST + 15)));
 }
 
-/*TODO prefix with riscv_ if keeping.  */
-bool
-compressed_lw_address_p (rtx x, bool strict)
+static bool
+riscv_compressed_lw_address_p (rtx x, bool strict)
 {
   struct riscv_address_info addr;
   bool result;
@@ -1862,7 +1861,16 @@ riscv_address_cost (rtx addr, machine_mode mode,
 		    addr_space_t as ATTRIBUTE_UNUSED,
 		    bool speed ATTRIBUTE_UNUSED)
 {
-  return riscv_address_insns (addr, mode, false);
+
+#if 1
+  if (cfun->machine->fwprop_not_expected
+#else
+  if (current_pass->tv_id != TV_FWPROP
+#endif
+      && !speed && mode == SImode
+      && riscv_compressed_lw_address_p (addr, false))
+    return 1;
+  return !speed + riscv_address_insns (addr, mode, false);
 }
 
 /* Return one word of double-word value OP.  HIGH_P is true to select the
