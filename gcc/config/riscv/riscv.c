@@ -850,7 +850,7 @@ riscv_legitimate_address_p (machine_mode mode, rtx x, bool strict_p)
 
 /* Return true if hard reg REGNO can be used in compressed instructions.  */
 
-static int
+static bool
 riscv_compressed_reg_p (int regno)
 {
   /* x8-x15/f8-f15 are compressible registers.  */
@@ -4670,7 +4670,8 @@ riscv_conditional_register_usage (void)
 static int
 riscv_register_priority (int regno)
 {
-  /* Favor x8-x15/f8-f15 to improve the odds of RVC instruction selection.  */
+  /* Favor compressed registers to improve the odds of RVC instruction
+     selection.  */
   if (riscv_compressed_reg_p (regno))
     return 1;
 
