@@ -872,8 +872,9 @@ compressed_lw_address_p (rtx x, bool strict)
       || (REGNO (addr.reg) >= FIRST_PSEUDO_REGISTER ? strict
 	 : riscv_compressed_reg_p (REGNO (addr.reg))
 	    && addr.reg != stack_pointer_rtx)
-      || ! insn_const_int_ok_for_constraint (INTVAL (addr.offset),
-					     CONSTRAINT_M))
+      || !CONST_INT_P (addr.offset)
+      || (INTVAL (addr.offset) & 3) != 0
+      || !IN_RANGE (INTVAL (addr.offset), 0, 124))
     return false;
 
   return result;
