@@ -1365,7 +1365,7 @@ riscv_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
 	    base = copy_to_mode_reg (Pmode, base);
 
       if (optimize_function_for_size_p (cfun)
-	  && cfun->machine->fwprop_not_expected
+	  && (strcmp (current_pass->name, "shorten_memrefs") == 0)
 	  && mode == SImode
 	  && (offset & 3) == 0
 	  && !IN_RANGE (offset, 0, 124))
@@ -4571,8 +4571,6 @@ pass_shorten_memrefs::execute (function *fn)
 
   basic_block bb;
   rtx_insn *insn;
-
-  cfun->machine->fwprop_not_expected = true;
 
   regstat_init_n_sets_and_refs ();
 
