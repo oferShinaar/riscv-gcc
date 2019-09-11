@@ -4708,6 +4708,16 @@ attempt_change (struct mem_inc_info *mii, rtx new_addr)
   rtx mem = *mii->mem_loc;
   rtx new_mem;
 
+
+  /* When not optimizing for speed, avoid changes that are expected to make code
+     size larger.  */
+  addr_space_t as = MEM_ADDR_SPACE (mem);
+  bool speed = optimize_bb_for_speed_p (BLOCK_FOR_INSN (mii->mem_insn));
+  int old_cost = address_cost (XEXP (mem, 0), GET_MODE (mem), as, speed);
+  int new_cost = address_cost (new_addr, GET_MODE (mem), as, speed);
+  if (new_cost > old_cost && !speed)
+    return NULL_RTX;
+
   /* Jump through a lot of hoops to keep the attributes up to date.  We
      do not want to call one of the change address variants that take
      an offset even though we know the offset in many cases.  These

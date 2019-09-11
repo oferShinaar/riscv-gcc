@@ -858,6 +858,8 @@ riscv_compressed_reg_p (int regno)
 	  || IN_RANGE (regno, FP_REG_FIRST + 8, FP_REG_FIRST + 15)));
 }
 
+/* Return true if load/store from/to address x can be compressed.  */
+
 static bool
 riscv_compressed_lw_address_p (rtx x)
 {
@@ -1354,7 +1356,9 @@ riscv_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
   if (riscv_split_symbol (NULL, x, mode, &addr))
     return riscv_force_address (addr, mode);
 
-  /* Handle BASE + OFFSET using riscv_add_offset.  */
+  /* When optimizing for size, try to convert BASE + LARGE_OFFSET into
+     NEW_BASE + SMALL_OFFSET to allow possible compressed load/store, otherwise,
+     handle BASE + OFFSET using riscv_add_offset.  */
   if (GET_CODE (x) == PLUS && CONST_INT_P (XEXP (x, 1))
       && INTVAL (XEXP (x, 1)) != 0)
     {
@@ -1866,7 +1870,7 @@ riscv_address_cost (rtx addr, machine_mode mode,
 		    addr_space_t as ATTRIBUTE_UNUSED,
 		    bool speed ATTRIBUTE_UNUSED)
 {
-      if (!speed && mode == SImode
+  if (!speed && mode == SImode
       && riscv_compressed_lw_address_p (addr))
     return 1;
   return !speed + riscv_address_insns (addr, mode, false);
@@ -4563,6 +4567,12 @@ public:
 
 }; // class pass_shorten_memrefs
 
+/* Try to make more use of compressed load and store instructions by replacing
+   a load/store at address BASE + LARGE_OFFSET with a new load/store at address
+   NEW BASE + SMALL OFFSET.  If NEW BASE is stored in a compressed register, the
+   load/store can be compressed.  Since creating NEW BASE incurs an overhead,
+   the change is only attempted when BASE is referenced by at least four
+   load/stores in the same basic block.  */
 unsigned int
 pass_shorten_memrefs::execute (function *fn)
 {
