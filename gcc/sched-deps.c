@@ -38,6 +38,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "sched-int.h"
 #include "params.h"
 #include "cselib.h"
+#include "predict.h"
 
 #ifdef INSN_SCHEDULING
 
